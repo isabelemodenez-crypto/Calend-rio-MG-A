@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendário Editorial MG&A - Planeamento de Conteúdo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root { font-family: 'Inter', sans-serif; }
+        .overflow-y-auto::-webkit-scrollbar { width: 6px; }
+        .overflow-y-auto::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+        .overflow-y-auto::-webkit-scrollbar-track { background-color: #f1f5f9; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .db-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+        .db-table th { 
+            position: sticky; top: 0; z-index: 10; 
+            background: #f8fafc; border-bottom: 2px solid #e2e8f0;
+            padding: 12px 16px; font-weight: 800; font-size: 10px;
+            text-transform: uppercase; letter-spacing: 0.1em; color: #64748b;
+            text-align: left;
+        }
+        .db-table td { padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        .db-row:hover { background-color: #f8fafc; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans antialiased text-slate-900">
+
+    <div id="app" class="flex h-screen overflow-hidden"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // CONFIGURAÇÕES FIREBASE (Injetadas pelo ambiente)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'editorial-mgea-global';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth, userId = null;
+        
+        // DOCUMENTO DE BANCO DE DADOS PÚBLICO (Todos os usuários acessam o mesmo arquivo)
+        const getGlobalRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'global_storage', 'database');
+
+        const calendarData = [
+            { 
+                day: 1, week: 1, title: "Quem somos e o que fazemos", category: "Institucional", format: "Reels", 
+                description: "Apresentar a empresa e diferenciais.", 
+                objective: "Apresentar a empresa e seus diferenciais de mercado. Gerar autoridade da marca e seus diferenciais.",
+                references: ["https://www.instagram.com/p/DNY0T7CyUp1/", "https://www.instagram.com/p/DOMdUVACCc1/?hl=en&img_index=1"]
+            },
+            { 
+                day: 2, week: 1, title: "Como funciona um processo crítico", category: "Técnico", format: "Reels / Carrossel", 
+                description: "Explicação de montagem eletromecânica.", 
+                objective: "Explicação de montagem eletromecânica ou similar com ilustração técnica. Demonstrar domínio técnico e didática.",
+                references: ["https://www.instagram.com/p/DPWMzpekQ-Y/", "https://www.instagram.com/p/DOWcObOkedu/", "https://www.instagram.com/p/DNBbEBfRJnN/"]
+            },
+            { 
+                day: 3, week: 1, title: "Norma NR relevante (NR-10/12)", category: "Segurança", format: "Carrossel", 
+                description: "Educação sobre compliance.", 
+                objective: "Educação sobre compliance e segurança de forma simples. Educar o mercado sobre riscos e compliance." 
+            },
+            { 
+                day: 4, week: 1, title: "A rotina da equipe em operação", category: "Bastidores", format: "Reel", 
+                description: "Humanização operacional.", 
+                objective: "Cortes rápidos da operação real. Humanização. Humanizar a marca e conectar com o operacional.",
+                references: ["https://www.instagram.com/p/DOD_CbfEfie/", "https://www.instagram.com/p/DP4ft-ElN4-/?hl=en"]
+            },
+            { 
+                day: 5, week: 1, title: "Entrega recente (Case)", category: "Projeto", format: "Reels", 
+                description: "Prova social visual.", 
+                objective: "Linha do tempo ou comparação visual de uma entrega. Prova social visual da capacidade de entrega.",
+                references: ["https://www.instagram.com/p/DOted3pEQV_/"]
+            },
+            { 
+                day: 6, week: 1, title: "Checklist de manutenção preventiva", category: "Dica Técnica", format: "Imagem Única", 
+                description: "Lista rápida e salvável.", 
+                objective: "Lista rápida e salvável para o dia a dia do engenheiro. Gerar salvamentos e ser útil para o dia a dia." 
+            },
+            { 
+                day: 7, week: 1, title: "Valor da empresa (Cultura)", category: "Cultura", format: "Institucional", 
+                description: "Segurança e qualidade.", 
+                objective: "Foco em segurança, qualidade ou precisão. Reforçar o posicionamento e valores corporativos.",
+                references: ["https://www.instagram.com/p/DQb-kegEcTg/", "https://www.instagram.com/p/DPCh-6QCNs5/?hl=en"]
+            },
+            { 
+                day: 8, week: 2, title: "Explicação de Serviço Principal", category: "Soluções", format: "Carrossel", 
+                description: "Montagem eletromecânica.", 
+                objective: "Como funciona na prática a montagem eletromecânica. Clareza sobre o portfólio de serviços." 
+            },
+            { 
+                day: 9, week: 2, title: "Redução de impactos ambientais", category: "ESG", format: "Infográfico", 
+                description: "Sustentabilidade.", 
+                objective: "Como a empresa lida com resíduos e sustentabilidade. Posicionar a marca como sustentável e responsável.",
+                references: ["https://www.instagram.com/p/DOwgVPOiEhx/?hl=en"]
+            },
+            { 
+                day: 10, week: 2, title: "Preventiva vs Corretiva", category: "Técnico", format: "Tabela Visual", 
+                description: "ROI da manutenção.", 
+                objective: "Comparativo técnico direto sobre custos e benefícios. Educar o cliente sobre o ROI da manutenção." 
+            },
+            { 
+                day: 11, week: 2, title: "História de Colaborador", category: "Pessoas", format: "Reels", 
+                description: "Valorização da equipe.", 
+                objective: "Destaque para um técnico ou engenheiro da equipe. Valorização da equipe e employer branding.",
+                references: ["https://www.instagram.com/p/DP1Jqwtkewc/"]
+            },
+            { day: 12, week: 2, title: "Solução para problema comum", category: "Mini-case", format: "Reel", description: "Resolução de problemas.", objective: "Vídeo curto: Problema identificado -> Solução aplicada. Demonstrar capacidade de resolução de problemas." },
+            { day: 13, week: 2, title: "Cultura Zero Acidentes", category: "Segurança", format: "Educativo", description: "Procedimento de segurança.", objective: "Procedimento de segurança crucial explicado. Reforçar a segurança como valor inegociável." },
+            { day: 14, week: 2, title: "Curiosidade Engenharia Industrial", category: "Curiosidade", format: "Imagem Única", description: "Fato técnico.", objective: "Fato técnico pouco conhecido (Engajamento leve). Gerar engajamento e curiosidade no público." },
+            { 
+                day: 15, week: 3, title: "Resultados de um projeto (dados)", category: "Autoridade", format: "Carrossel", 
+                description: "Dados e números.", 
+                objective: "Horas trabalhadas, número de clientes, setores atendidos. Gerar autoridade através de números sólidos.",
+                references: ["https://www.instagram.com/p/DOee5D2DC8i/?hl=en", "https://www.instagram.com/p/DNqtBhfN7w9/?hl=en&img_index=1"]
+            },
+            { day: 16, week: 3, title: "Identificar sinais de falha", category: "Tutorial", format: "Carrossel", description: "Manutenção preditiva.", objective: "Passo a passo didático para identificar problemas em ativos. Educar tecnicamente e gerar autoridade." },
+            { day: 17, week: 3, title: "Etapas de um projeto industrial", category: "Processo", format: "Timeline", description: "Do planeamento à entrega.", objective: "Do planejamento à entrega final. Mostrar organização e transparência de processos." },
+            { day: 18, week: 3, title: "Equipamentos do dia a dia", category: "Bastidores", format: "Reel", description: "Tecnologia industrial.", objective: "Vídeo curto: demonstração de ferramentas de alta tecnologia. Atrair interesse por tecnologia e ferramentas." },
+            { day: 19, week: 3, title: "Depoimento de Cliente", category: "Prova Social", format: "Vídeo", description: "Satisfação do cliente.", objective: "Resultado obtido após um serviço realizado. Validação externa da qualidade do serviço." },
+            { day: 20, week: 3, title: "3 Erros comuns na manutenção", category: "Técnico", format: "Carrossel", description: "Prevenção de falhas.", objective: "Conteúdo de alerta e autoridade técnica. Alertar o cliente e prevenir falhas (Autoridade)." },
+            { day: 21, week: 3, title: "Campanha interna de segurança", category: "Cultura", format: "Foto", description: "Imagem de cuidado.", objective: "Mostrar o cuidado com a equipe interna. Fortalecer cultura interna e imagem de cuidado." },
+            { day: 22, week: 4, title: "Indústria 4.0 e Tecnologia", category: "Tendências", format: "Carrossel", description: "Inovação industrial.", objective: "Inovação aplicada à manutenção de ativos. Posicionar a empresa como inovadora e atual." },
+            { day: 23, week: 4, title: "Responsabilidade Social / Certificação", category: "ESG", format: "Institucional", description: "Apoio comunitário.", objective: "Projetos locais e apoio à comunidade. Reforçar o pilar social da empresa.", references: ["https://www.instagram.com/p/DRAl9luCfIP/?hl=en"] },
+            { day: 24, week: 4, title: "Otimizar custos com gestão", category: "Artigo Técnico", format: "Link", description: "Gestão estratégica.", objective: "Conteúdo denso e avançado para decisores. Atrair decisores e demonstrar visão estratégica." },
+            { day: 25, week: 4, title: "Conceito Difícil (Ex: Curva P-F)", category: "Técnico", format: "Reel", description: "Explicação didática.", objective: "Explicação rápida (20-30s) de um conceito complexo. Simplificar o complexo e mostrar didática." },
+            { day: 26, week: 4, title: "Atualização de Obra", category: "Projeto", format: "Timelapse", description: "Acompanhamento real.", objective: "Transparência operacional. Obra em andamento. Mostrar a empresa em movimento e atividade." },
+            { day: 27, week: 4, title: "Checklist de Segurança Específico", category: "Segurança", format: "Infográfico", description: "Serviços de risco.", objective: "Focado em um serviço de alto risco. Utilidade técnica e reforço de segurança." },
+            { day: 28, week: 4, title: "Desafio da Engenharia Hoje", category: "Engajamento", format: "Interativo", description: "Debate técnico.", objective: "Pergunta aberta para gerar comentários. Aumentar a interação e ouvir o público." },
+            { day: 29, week: 4, title: "Linha do tempo da empresa", category: "Institucional", format: "Carrossel", description: "História e legado.", objective: "Reforço de história, solidez e credibilidade. Construir legado e confiança na marca." },
+            { day: 30, week: 4, title: "Fechamento do Mês", category: "Recap", format: "Carrossel", description: "Resumo de entregas.", objective: "Compilado de entregas e aprendizados do período. Resumo de autoridade e transparência mensal.", references: ["https://www.instagram.com/p/DNEXCa1s1X4/?hl=en", "https://www.instagram.com/p/DJcdkUvMara/?hl=en"] }
+        ];
+
+        let state = {
+            completedDays: [],
+            selectedWeek: 'All', 
+            filterFormat: 'Todos',
+            databaseEntries: [], 
+            drafts: {},          
+            mobileMenuOpen: false,
+            message: null,
+            isLoading: true
+        };
+
+        const uniqueFormats = ['Todos', 'Reel', 'Carrossel', 'Imagem Única', 'Infográfico', 'Vídeo', 'Link', 'Educativo'];
+
+        // --- CORE DATABASE FUNCTIONS ---
+
+        async function initGlobalSync() {
+            if (!db || !userId) return;
+            // Ouve as atualizações do documento GLOBAL (acessível a todos)
+            onSnapshot(getGlobalRef(), (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    state.completedDays = data.completedDays || [];
+                    state.databaseEntries = data.databaseEntries || [];
+                } else {
+                    // Inicializa se for a primeira vez
+                    state.completedDays = [];
+                    state.databaseEntries = [];
+                }
+                state.isLoading = false;
+                render();
+            }, (err) => { 
+                console.error("Firestore Sync Error:", err);
+                state.isLoading = false; 
+                render(); 
+            });
+        }
+
+        async function saveToGlobalCloud() {
+            if (!db || !userId) return;
+            try {
+                // Grava no documento público global
+                await setDoc(getGlobalRef(), {
+                    completedDays: state.completedDays,
+                    databaseEntries: state.databaseEntries,
+                    lastUpdate: new Date().toISOString(),
+                    updatedBy: userId
+                }, { merge: true });
+            } catch (err) {
+                console.error("Global Cloud Error:", err);
+                setMessage("Erro ao salvar dados compartilhados.", "error");
+            }
+        }
+
+        // --- UI RENDERERS ---
+
+        function getCategoryBadge(category) {
+            let color = "bg-slate-100 text-slate-600";
+            if (category === "Segurança") color = "bg-red-100 text-red-600";
+            else if (category.includes("Técnico")) color = "bg-blue-100 text-blue-600";
+            else if (category === "ESG") color = "bg-green-100 text-green-600";
+            return `<span class="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${color}">${category}</span>`;
+        }
+
+        function renderCards(data) {
+            return data.map(item => {
+                const isCompleted = state.completedDays.includes(item.day);
+                const draft = state.drafts[item.day] || { comment: '', drive: '' };
+                
+                const referencesHtml = item.references && item.references.length > 0 ? `
+                    <div class="mb-6 pt-4 border-t border-slate-50 text-left">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Referências</span>
+                        <div class="flex flex-col gap-1.5">
+                            ${item.references.map((link, i) => `
+                                <a href="${link}" target="_blank" class="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1.5 font-bold transition-colors">
+                                    <i data-lucide="external-link" class="w-3 h-3"></i> Referência ${i + 1}
+                                </a>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : '';
+
+                return `
+                    <div class="group relative rounded-3xl border p-6 transition-all hover:shadow-xl flex flex-col ${isCompleted ? 'border-green-200 bg-green-50/20' : 'border-slate-200 bg-white shadow-sm'}">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[10px] font-black text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-100">Dia ${item.day}</span>
+                            <button onclick="window.toggleDay(${item.day})">
+                                ${isCompleted ? '<i data-lucide="check-circle-2" class="w-7 h-7 text-green-500 fill-green-100"></i>' : '<i data-lucide="circle" class="w-7 h-7 text-slate-200"></i>'}
+                            </button>
+                        </div>
+
+                        <div class="mb-4 text-left">
+                            <h3 class="font-bold text-slate-800 text-lg leading-tight mb-2">${item.title}</h3>
+                            <div class="flex flex-wrap gap-2">${getCategoryBadge(item.category)}</div>
+                        </div>
+
+                        <p class="text-xs text-slate-500 mb-6 leading-relaxed line-clamp-3 text-left">${item.description}</p>
+
+                        <div class="mb-6 bg-blue-50/50 p-3 rounded-2xl border border-blue-100/50 flex gap-2.5 items-start">
+                            <i data-lucide="target" class="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5"></i>
+                            <div class="text-left">
+                                <span class="text-[10px] font-bold text-blue-600/70 uppercase tracking-wide block mb-0.5">Objetivo Estratégico</span>
+                                <p class="text-xs text-blue-800 font-medium leading-relaxed">${item.objective}</p>
+                            </div>
+                        </div>
+
+                        ${referencesHtml}
+
+                        <div class="space-y-4 mt-auto pt-4 border-t border-slate-50">
+                            <div>
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 text-left">Anotação Editorial</label>
+                                <textarea 
+                                    placeholder="Escreva algo para todos os editores verem..."
+                                    oninput="window.updateDraft(${item.day}, 'comment', this.value)"
+                                    class="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 min-h-[60px] resize-none"
+                                >${draft.comment}</textarea>
+                            </div>
+
+                            <div>
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 text-left">Link da Imagem</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Link Google Drive ou similar..."
+                                    value="${draft.drive}"
+                                    oninput="window.updateDraft(${item.day}, 'drive', this.value)"
+                                    class="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                                />
+                            </div>
+
+                            <button 
+                                onclick="window.submitToDatabase(${item.day})"
+                                class="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-green-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <i data-lucide="send" class="w-4 h-4"></i> Publicar para a Equipe
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderSummaryView() {
+            const rows = [...state.databaseEntries].reverse().map((entry) => `
+                <tr class="db-row transition-colors">
+                    <td class="py-6 px-4 font-bold text-slate-400 text-[10px]">
+                        ${new Date(entry.date).toLocaleDateString('pt-PT')}<br>
+                        <span class="text-[8px] opacity-60">${new Date(entry.date).toLocaleTimeString('pt-PT', {hour: '2-digit', minute:'2-digit'})}</span>
+                    </td>
+                    <td class="py-6 px-4">
+                        <div class="flex flex-col">
+                            <span class="text-[9px] text-blue-600 font-black uppercase">Dia ${entry.day}</span>
+                            <span class="font-bold text-slate-800 text-sm">${entry.title}</span>
+                        </div>
+                    </td>
+                    <td class="py-6 px-4 bg-slate-50/40 text-left">
+                        <p class="text-sm text-slate-700 leading-relaxed">${entry.comment}</p>
+                    </td>
+                    <td class="py-6 px-4">
+                        ${entry.drive ? `
+                            <a href="${entry.drive}" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold uppercase tracking-tighter hover:bg-blue-100 transition-all">
+                                <i data-lucide="external-link" class="w-3 h-3"></i> Abrir Anexo
+                            </a>
+                        ` : '<span class="text-[10px] text-slate-300 italic">Sem anexo</span>'}
+                    </td>
+                </tr>
+            `).join('');
+
+            return `
+                <div class="max-w-7xl mx-auto py-10 px-6 fade-in">
+                    <div class="mb-10 flex items-center gap-6">
+                        <div class="p-6 bg-indigo-600 rounded-[2.5rem] shadow-2xl shadow-indigo-200 text-white"><i data-lucide="database" class="w-10 h-10"></i></div>
+                        <div class="text-left">
+                            <h2 class="text-5xl font-black text-slate-900 tracking-tighter mb-1">Base de Dados Global</h2>
+                            <p class="text-lg text-slate-400 font-medium italic">Histórico Público MG&A • Arquivado para Todos os Editores</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="db-table w-full">
+                                <thead>
+                                    <tr>
+                                        <th class="w-32">Registro</th>
+                                        <th class="w-1/4">Conteúdo</th>
+                                        <th>Comentário Compartilhado</th>
+                                        <th class="w-48">Anexo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rows || '<tr><td colspan="4" class="py-20 text-center text-slate-300 font-bold uppercase tracking-widest italic">A base de dados global está vazia.</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            if (state.isLoading) {
+                app.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center bg-white"><div class="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mb-4"></div><span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Conectando à Base de Dados Compartilhada...</span></div>`;
+                return;
+            }
+
+            const isSummary = state.selectedWeek === 'Summary';
+            const sidebarHtml = `
+                <aside class="fixed md:static inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col ${state.mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-500">
+                    <div class="p-10 border-b border-slate-100 text-center">
+                        <img src="https://mgea.com.br/wp-content/uploads/2024/04/MGeA_LOGO_tagline1.png" alt="Logo" class="h-16 w-auto mx-auto mb-6">
+                        <h1 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Calendário Editorial</h1>
+                    </div>
+                    <nav class="flex-1 overflow-y-auto p-6 space-y-2">
+                        <h3 class="text-[10px] font-black text-slate-300 uppercase mb-4 px-4 tracking-[0.3em]">Navegação</h3>
+                        ${[1, 2, 3, 4].map(w => `<button onclick="window.selectWeek(${w})" class="w-full flex items-center justify-between px-5 py-4 rounded-2xl text-sm transition-all ${state.selectedWeek == w ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-100' : 'text-slate-500 hover:bg-slate-50'}"><i data-lucide="calendar" class="w-4 h-4"></i> Semana 0${w}</button>`).join('')}
+                        <button onclick="window.selectWeek('All')" class="w-full flex items-center justify-between px-5 py-4 rounded-2xl text-sm transition-all ${state.selectedWeek === 'All' ? 'bg-slate-900 text-white font-black shadow-lg' : 'text-slate-500 hover:bg-slate-50'}"><i data-lucide="grid" class="w-4 h-4"></i> Visão Mensal</button>
+                        <div class="pt-8 mt-8 border-t border-slate-100">
+                             <button onclick="window.selectWeek('Summary')" class="w-full flex items-center justify-between px-6 py-5 rounded-3xl text-sm transition-all ${isSummary ? 'bg-indigo-600 text-white font-black shadow-2xl' : 'text-slate-600 hover:bg-slate-50'}"><i data-lucide="database" class="w-5 h-5"></i> Histórico Compartilhado</button>
+                        </div>
+                    </nav>
+                </aside>
+            `;
+
+            const filtered = calendarData.filter(i => {
+                const weekMatch = state.selectedWeek === 'All' ? true : i.week == state.selectedWeek;
+                const formatMatch = state.filterFormat === 'Todos' ? true : i.format.toLowerCase().includes(state.filterFormat.toLowerCase());
+                return weekMatch && formatMatch;
+            });
+
+            const mainHtml = `
+                <main class="flex-1 flex flex-col overflow-hidden bg-[#FBFDFF]">
+                    <header class="md:hidden bg-white border-b p-6 flex justify-between items-center z-50">
+                        <img src="https://mgea.com.br/wp-content/uploads/2024/04/MGeA_LOGO_tagline1.png" alt="Logo" class="h-10 w-auto">
+                        <button onclick="window.toggleMobileMenu()"><i data-lucide="menu"></i></button>
+                    </header>
+                    <div class="flex-1 overflow-y-auto p-8 md:p-14 scroll-smooth">
+                        ${isSummary ? renderSummaryView() : `
+                            <div class="max-w-7xl mx-auto fade-in">
+                                <div class="mb-14 flex flex-col md:flex-row md:items-end justify-between gap-8">
+                                    <div class="text-left">
+                                        <h2 class="text-6xl font-black text-slate-900 tracking-tighter mb-4">${state.selectedWeek === 'All' ? 'Visão Mensal' : `Semana 0${state.selectedWeek}`}</h2>
+                                        <p class="text-xl text-slate-400 font-medium italic">Controle estratégico MG&A.</p>
+                                    </div>
+                                    <div class="flex items-center gap-4 bg-white p-3 rounded-3xl border border-slate-100 shadow-xl shadow-slate-100">
+                                        <select onchange="window.setFilterFormat(this.value)" class="p-3 rounded-2xl border-none text-xs bg-slate-50 font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10 cursor-pointer min-w-[150px]">
+                                            ${uniqueFormats.map(f => `<option value="${f}" ${state.filterFormat === f ? 'selected' : ''}>${f}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10 pb-32">${renderCards(filtered)}</div>
+                            </div>
+                        `}
+                    </div>
+                </main>
+            `;
+
+            app.innerHTML = sidebarHtml + mainHtml;
+            lucide.createIcons();
+            if (state.message) renderMessage();
+        }
+
+        function renderMessage() {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-10 py-5 rounded-[2rem] shadow-2xl text-white font-black bg-slate-900 border-2 border-slate-800 fade-in flex items-center gap-4`;
+            msgDiv.innerHTML = `<i data-lucide="check" class="w-6 h-6 text-green-400"></i><span class="uppercase tracking-widest text-xs">${state.message.text}</span>`;
+            document.body.appendChild(msgDiv);
+            lucide.createIcons();
+            setTimeout(() => { msgDiv.style.opacity = '0'; msgDiv.style.transform = 'translate(-50%, 30px)'; setTimeout(() => msgDiv.remove(), 600); }, 3000);
+            state.message = null;
+        }
+
+        // --- ACTIONS ---
+
+        window.submitToDatabase = async (day) => {
+            if (state.isLoading) return;
+            const draft = state.drafts[day] || { comment: '', drive: '' };
+            const item = calendarData.find(i => i.day === day);
+            
+            if (!draft.comment && !draft.drive) {
+                setMessage("Preencha a anotação ou o link antes de publicar.", "error");
+                return;
+            }
+
+            // Adiciona nova entrada no array compartilhado
+            state.databaseEntries.push({
+                id: crypto.randomUUID(),
+                date: new Date().toISOString(), 
+                day: day,
+                title: item.title,             
+                comment: draft.comment || 'Nota sem texto', 
+                drive: draft.drive || '',
+                author: userId
+            });
+
+            state.drafts[day] = { comment: '', drive: '' };
+            
+            // Grava na nuvem global (acessível para qualquer um que abrir o doc)
+            await saveToGlobalCloud();
+            
+            setMessage("Publicado na base global com sucesso!", "success");
+            render();
+        };
+
+        window.updateDraft = (day, field, val) => {
+            if (!state.drafts[day]) state.drafts[day] = { comment: '', drive: '' };
+            state.drafts[day][field] = val;
+        };
+
+        window.toggleDay = async (day) => {
+            if (!userId) return;
+            const idx = state.completedDays.indexOf(day);
+            if (idx > -1) state.completedDays.splice(idx, 1);
+            else state.completedDays.push(day);
+            await saveToGlobalCloud();
+            render();
+        };
+
+        window.selectWeek = (w) => { state.selectedWeek = w; state.mobileMenuOpen = false; render(); };
+        window.setFilterFormat = (f) => { state.filterFormat = f; render(); };
+        window.toggleMobileMenu = () => { state.mobileMenuOpen = !state.mobileMenuOpen; render(); };
+        function setMessage(text, type) { state.message = { text, type }; }
+
+        // --- BOOTSTRAP ---
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (firebaseConfig) {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app); db = getFirestore(app);
+                
+                const initAuth = async () => {
+                  try {
+                    if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+                    else await signInAnonymously(auth);
+                  } catch(e) { console.error("Auth Fail", e); }
+                };
+                
+                await initAuth();
+                onAuthStateChanged(auth, (user) => { 
+                    if (user) { 
+                        userId = user.uid; 
+                        initGlobalSync(); // Conecta à nuvem global
+                    } 
+                });
+            } else { state.isLoading = false; render(); }
+        });
+    </script>
+</body>
+</html>
